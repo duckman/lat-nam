@@ -1,0 +1,3 @@
+nifest-Version: 1.0
+Created-By: duckman
+Main-Class: Scrape

@@ -1,0 +1,38 @@
+<project name="kate" default="build">
+	<description>
+		Kate's portfolio blog thing
+	</description>
+
+	<property name="tomcat-home" value="/usr/share/tomcat-7" />
+
+	<path id="compile.classpath">
+		<fileset dir="web/WEB-INF/lib" includes="*.jar" />
+		<fileset dir="${tomcat-home}/bin" includes="*.jar" />
+		<fileset dir="${tomcat-home}/lib" includes="*.jar" />
+		<fileset dir="${tomcat-home}/lib" includes="*.jar" />
+	</path>
+
+	<target name="init">
+		<mkdir dir="build/classes"/>
+		<mkdir dir="dist" />
+	</target>
+
+	<target name="compile" depends="init" >
+		<javac destdir="build/classes" srcdir="src" includeAntRuntime="false">
+			<classpath refid="compile.classpath"/>
+		</javac>
+	</target>
+
+	<target name="build" depends="compile">
+		<war destfile="dist/mtgdb.war" webxml="web/WEB-INF/web.xml">
+			<fileset dir="web"/>
+			<lib dir="web/WEB-INF/lib"/>
+			<classes dir="build/classes"/>
+		</war>
+	</target>
+
+	<target name="clean">
+		<delete dir="dist" />
+		<delete dir="build" />
+	</target>
+</project>
