@@ -1,12 +1,20 @@
 $(function(){
-	window.setInterval(function(){
+	$('#search').submit(function(){
 		$.ajax({
-			url: 'Status',
+			url: 'Find',
 			dataType: 'json',
+			data: {
+				query: '{name:"'+$('#text').val()+'"}'
+			},
 			type: 'POST',
 			success: function(data){
-				$('#status').html('Card Jobs: '+data.cardJobs+'<br />Language Jobs: '+data.langJobs);
+				$('#cards').empty();
+				for(var x=0;x<data.length;++x)
+				{
+					$('#cards').append('<div class="card"><img src="Image?type=card&multiverseid='+data[x].multiverseid+'" /><br />Name: '+data[x].name+'<br />Text: '+data[x].text+'</div>');
+				}
 			}
 		});
-	},10000);
+		return false;
+	});
 });
