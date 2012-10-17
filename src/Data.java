@@ -10,10 +10,12 @@ import java.io.ObjectOutputStream;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.File;
+import java.io.StringReader;
 import java.net.URL;
 import java.net.UnknownHostException;
 import org.jsoup.Jsoup;
 import java.util.Arrays;
+import java.util.List;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Collections;
@@ -33,6 +35,9 @@ import javax.servlet.ServletContextListener;
 import javax.servlet.ServletContextEvent;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.lucene.analysis.standard.StandardTokenizer;
+import org.apache.lucene.analysis.tokenattributes.CharTermAttribute;
+import org.apache.lucene.util.Version;
 
 @WebListener
 public class Data implements ServletContextListener,Runnable
@@ -133,36 +138,49 @@ public class Data implements ServletContextListener,Runnable
 
 	public void reIndexWords()
 	{
-		com.mongodb.DBCursor curs = coll.find();
-
-		DBObject current;
-		while(curs.hasNext())
+		for(DBObject card:coll.find().sort(new BasicDBObject("multiverseid",1)))
 		{
-			current = curs.next();
-			current = insertWords(current);
-			coll.save(current);
+			LogFactory.getLog(Data.class).info("Indexing words for "+card.get("multiverseid"));
+			coll.save(insertWords(card));
 		}
+	}
+
+	public List<String> tokenize(String str)
+	{
+		return tokenize(str,false);
+	}
+
+	public List<String> tokenize(String str, boolean dupe)
+	{
+		ArrayList<String> list = new ArrayList<String>();
+		StandardTokenizer token = new StandardTokenizer(Version.LUCENE_40,new StringReader(str));
+		CharTermAttribute attr = token.addAttribute(CharTermAttribute.class);
+		try
+		{
+			token.reset();
+			while(token.incrementToken())
+			{
+				if(dupe || !list.contains(attr.toString().toLowerCase()))
+				{
+					list.add(attr.toString().toLowerCase());
+				}
+			}
+			token.end();
+			token.close();
+		}
+		catch(IOException ex)
+		{
+			// my guess is this can't really happen with a StringReader being used
+			LogFactory.getLog(Data.class).error(null,ex);
+		}
+
+		return list;
 	}
 
 	private DBObject insertWords(DBObject card)
 	{
-		String[] words = null;
-		words = ArrayUtils.addAll(words,getWords(card.get("name")));
-		words = ArrayUtils.addAll(words,getWords(card.get("text")));
-		words = ArrayUtils.addAll(words,getWords(card.get("flavor")));
-		words = ArrayUtils.addAll(words,getWords(card.get("type")));
-		words = ArrayUtils.addAll(words,getWords(card.get("expansion")));
-		words = ArrayUtils.addAll(words,getWords(card.get("cost")));
-		ArrayList trimmed = new ArrayList();
-		for(int x=0;x<words.length;x++)
-		{
-			words[x] = words[x].replaceAll("^\\W+|\\W+$","");
-			if(words[x].length()>0 && !trimmed.contains(words[x].toLowerCase()))
-			{
-				trimmed.add(words[x].toLowerCase());
-			}
-		}
-		card.put("_words",trimmed);
+		String str = card.get("name")+" "+card.get("text")+" "+card.get("flavor")+" "+card.get("_types")+" "+card.get("expansion")+" "+card.get("cost");
+		card.put("_words",tokenize(str,false));
 		return card;
 	}
 
@@ -175,10 +193,27 @@ public class Data implements ServletContextListener,Runnable
 		return null;
 	}
 
+	private void redoColors()
+	{
+		try
+		{
+			for(DBObject card:coll.find(new BasicDBObject("_cost",new BasicDBObject("$ne",null))))
+			{
+				card.put("cost",card.get("_cost"));
+				coll.save(card);
+				coll.update(card,new BasicDBObject("$unset",new BasicDBObject("_cost",1)));
+			}
+		}
+		catch(Exception ex)
+		{
+			LogFactory.getLog(Data.class).error(null,ex);
+		}
+	}
+
 	@Override
 	public void run()
 	{
-		//allLanguages();
+		redoColors();
 		go = true;
 		while(go)
 		{
@@ -278,7 +313,7 @@ public class Data implements ServletContextListener,Runnable
 		return theData;
 	}
 
-	public static ArrayList<DBObject> fetchRemoteCard(int multiverseID) throws IOException
+	public ArrayList<DBObject> fetchRemoteCard(int multiverseID) throws IOException
 	{
 		URL in = new URL("http://gatherer.wizards.com/Pages/Card/Details.aspx?printed=true&multiverseid="+multiverseID);
 		Document dom = Jsoup.parse(in.openStream(),null,"http://gatherer.wizards.com/");
@@ -312,7 +347,7 @@ public class Data implements ServletContextListener,Runnable
 		return docs;
 	}
 
-	private static DBObject parseCard(Document dom, String prefix)
+	private DBObject parseCard(Document dom, String prefix)
 	{
 		BasicDBObject doc = new BasicDBObject();
 		
@@ -330,7 +365,8 @@ public class Data implements ServletContextListener,Runnable
 			doc.put("cmc",Integer.parseInt(dom.select("#"+prefix+"_cmcRow > .value").first().text().trim()));
 		}
 		// type
-		doc.put("type",dom.select("#"+prefix+"_typeRow > .value").first().text().trim());
+		doc.put("_types",dom.select("#"+prefix+"_typeRow > .value").first().text().trim());
+		doc.put("types",tokenize(dom.select("#"+prefix+"_typeRow > .value").first().text().trim(),true));
 		// text
 		replaceImages(dom.select("#"+prefix+"_textRow > .value > .cardtextbox > img"));
 		String text = "";
@@ -357,13 +393,44 @@ public class Data implements ServletContextListener,Runnable
 			}
 			doc.put("flavor",text);
 		}
+		// expansion
+		doc.put("expansion",dom.select("#"+prefix+"_setRow > .value").first().text().trim());
 		// power and toughness
 		if(dom.select("#"+prefix+"_ptRow").size()>0)
 		{
-			doc.put("pt",dom.select("#"+prefix+"_ptRow > .value").first().text().trim());
+			if(dom.select("#"+prefix+"_setRow > .value").first().text().trim().equals("Vanguard"))
+			{
+				doc.put("hl",dom.select("#"+prefix+"_ptRow > .value").first().text().trim());
+			}
+			else if(dom.select("#"+prefix+"_typeRow > .value").first().text().trim().startsWith("Planeswalker"))
+			{
+				doc.put("loyalty",Integer.parseInt(dom.select("#"+prefix+"_ptRow > .value").first().text().trim()));
+			}
+			else
+			{
+				String[] pt = dom.select("#"+prefix+"_ptRow > .value").first().text().trim().split("/");
+				try
+				{
+					doc.put("power",Integer.parseInt(pt[0].trim()));
+				}
+				catch(NumberFormatException ex)
+				{
+					// assume it is a special value like *
+					doc.put("power",-100);
+				}
+				doc.put("power-s",pt[0].trim());
+				try
+				{
+					doc.put("toughness",Integer.parseInt(pt[1].trim()));
+				}
+				catch(NumberFormatException ex)
+				{
+					// assume it is a special value like *
+					doc.put("toughness",-100);
+				}
+				doc.put("toughness-s",pt[1].trim());
+			}
 		}
-		// expansion
-		doc.put("expansion",dom.select("#"+prefix+"_setRow > .value").first().text().trim());
 		// rarity
 		doc.put("rarity",dom.select("#"+prefix+"_rarityRow > .value").first().text().trim());
 		// number
@@ -377,7 +444,7 @@ public class Data implements ServletContextListener,Runnable
 		return doc;
 	}
 
-	private static String getManaCost(Elements colors)
+	private String getManaCost(Elements colors)
 	{
 		HashMap<String,Integer> table = new HashMap<String,Integer>();
 		for(Element color:colors)
@@ -406,7 +473,7 @@ public class Data implements ServletContextListener,Runnable
 		return result;
 	}
 
-	private static void replaceImages(Elements images)
+	private void replaceImages(Elements images)
 	{
 		for(Element img:images)
 		{
@@ -423,8 +490,6 @@ public class Data implements ServletContextListener,Runnable
 	public BasicDBObject getLast()
 	{
 		BasicDBObject result = new BasicDBObject(coll.find().sort(new BasicDBObject("_id",-1)).limit(1).next().toMap());
-		result.remove("_id");
-		result.remove("_words");
 		return result;
 	}
 
@@ -460,10 +525,7 @@ public class Data implements ServletContextListener,Runnable
 
 	public DBCursor find(DBObject query,String sort,boolean asc,int limit,int skip)
 	{
-		BasicDBObject fields = new BasicDBObject("_id",0);
-		fields.put("_words",0);
-
-		DBCursor cur = coll.find(query,fields);
+		DBCursor cur = coll.find(query);
 
 		if(sort!=null && sort.length()>0)
 		{
