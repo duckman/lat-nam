@@ -17,11 +17,11 @@ public class AddJobs extends HttpServlet
 	@Override
 	public void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException
 	{
-		if(isValid(req.getParameter("key")) && req.getParameter("start") != null && req.getParameter("end") != null)
+		if(Authenticate.isValid(req.getParameter("key")) && req.getParameter("start") != null && req.getParameter("end") != null)
 		{
 			Data.getInstance().addJobs(Integer.parseInt(req.getParameter("start")),Integer.parseInt(req.getParameter("end")));
 		}
-		if(isValid(req.getParameter("key")) && req.getParameter("set") != null)
+		if(Authenticate.isValid(req.getParameter("key")) && req.getParameter("set") != null)
 		{
 			int page=0;
 			int last=0;

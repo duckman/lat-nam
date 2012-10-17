@@ -193,27 +193,9 @@ public class Data implements ServletContextListener,Runnable
 		return null;
 	}
 
-	private void redoColors()
-	{
-		try
-		{
-			for(DBObject card:coll.find(new BasicDBObject("_cost",new BasicDBObject("$ne",null))))
-			{
-				card.put("cost",card.get("_cost"));
-				coll.save(card);
-				coll.update(card,new BasicDBObject("$unset",new BasicDBObject("_cost",1)));
-			}
-		}
-		catch(Exception ex)
-		{
-			LogFactory.getLog(Data.class).error(null,ex);
-		}
-	}
-
 	@Override
 	public void run()
 	{
-		redoColors();
 		go = true;
 		while(go)
 		{
@@ -357,7 +339,26 @@ public class Data implements ServletContextListener,Runnable
 		if(dom.select("#"+prefix+"_manaRow").size()>0)
 		{
 			replaceImages(dom.select("#"+prefix+"_manaRow > .value > img"));
-			doc.put("cost",dom.select("#"+prefix+"_manaRow > .value").first().text().trim().replaceAll("\\+\\*\\*","<").replaceAll("\\*\\*\\+",">"));
+			HashMap<String,Integer> map = new HashMap<String,Integer>();
+			for(String color:tokenize(dom.select("#"+prefix+"_manaRow > .value").first().text().trim(),true))
+			{
+				try
+				{
+					map.put("colorless",Integer.parseInt(color));
+				}
+				catch(NumberFormatException ex)
+				{
+					if(map.get(color)==null)
+					{
+						map.put(color,1);
+					}
+					else
+					{
+						map.put(color,map.get(color)+1);
+					}
+				}
+			}
+			doc.put("cost",map);
 		}
 		// cmc
 		if(dom.select("#"+prefix+"_cmcRow").size()>0)
@@ -394,7 +395,7 @@ public class Data implements ServletContextListener,Runnable
 			doc.put("flavor",text);
 		}
 		// expansion
-		doc.put("expansion",dom.select("#"+prefix+"_setRow > .value").first().text().trim());
+		doc.put("expansion",dom.select("#"+prefix+"_setRow > .value").first().text().trim().toLowerCase());
 		// power and toughness
 		if(dom.select("#"+prefix+"_ptRow").size()>0)
 		{
@@ -432,7 +433,7 @@ public class Data implements ServletContextListener,Runnable
 			}
 		}
 		// rarity
-		doc.put("rarity",dom.select("#"+prefix+"_rarityRow > .value").first().text().trim());
+		doc.put("rarity",dom.select("#"+prefix+"_rarityRow > .value").first().text().trim().toLowerCase());
 		// number
 		if(dom.select("#"+prefix+"_numberRow").size()>0)
 		{
@@ -480,6 +481,11 @@ public class Data implements ServletContextListener,Runnable
 			TextNode text = new TextNode("+**"+img.attr("alt")+"**+","");
 			img.replaceWith(text);
 		}
+	}
+
+	public static Mongo getMongodb()
+	{
+		return mongo;
 	}
 
 	public long getCount()
