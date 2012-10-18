@@ -17,4 +17,29 @@ $(function(){
 		});
 		return false;
 	});
+
+	$('#text').typeahead({
+		minLength: 3,
+		source: function(query,callback){
+			$.ajax({
+				url: 'Find',
+				dataType: 'json',
+				data: {
+					query: '{name:{"$regex":"'+query+'"}}'
+				},
+				type: 'POST',
+				success: function(data){
+					var rtn = new Array();
+					for(var x=0;x<data.length;++x)
+					{
+						if(rtn.indexOf(data[x].name)==-1)
+						{
+							rtn.push(data[x].name);
+						}
+					}
+					callback(rtn);
+				}
+			})
+		}
+	});
 });
