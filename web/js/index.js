@@ -25,7 +25,8 @@ $(function(){
 				url: 'Find',
 				dataType: 'json',
 				data: {
-					query: '{name:{"$regex":"'+query+'"}}'
+					query: '{name:{"$regex":"'+query+'"}}',
+					fields: '{name:1}'
 				},
 				type: 'POST',
 				success: function(data){

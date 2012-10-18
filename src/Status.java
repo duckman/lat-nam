@@ -7,6 +7,8 @@ import java.io.PrintWriter;
 import java.io.IOException;
 import org.json.JSONObject;
 import org.json.JSONException;
+import com.mongodb.DBCollection;
+import com.mongodb.BasicDBObject;
 import com.mongodb.tools.ConnectionPoolStat;
 
 @WebServlet(name="Status",urlPatterns={"/Status"})
@@ -18,14 +20,12 @@ public class Status extends HttpServlet
 		resp.setContentType("application/json; charset=UTF-8");
 		resp.setCharacterEncoding("UTF-8");
 		PrintWriter out = resp.getWriter();
-		Data data = Data.getInstance();
+		DBCollection coll = Data.getMongodb().getDB("mtg").getCollection("cards");
 		JSONObject json = new JSONObject();
 		try
 		{
-			json.put("count",data.getCount());
-			json.put("last",data.getLast());
-			json.put("cardJobs",data.getCardJobs());
-			json.put("langJobs",data.getLangJobs());
+			json.put("count",coll.count());
+			json.put("last",new BasicDBObject(coll.find().sort(new BasicDBObject("_id",-1)).limit(1).next().toMap()));
 			json.put("mongo",new JSONObject(new ConnectionPoolStat().getStats())); 
 			out.print(json.toString());
 		}

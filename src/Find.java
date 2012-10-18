@@ -29,6 +29,7 @@ public class Find extends HttpServlet
 		try
 		{
 			DBObject query = new BasicDBObject();
+			DBObject fields = new BasicDBObject();
 			String sort = null;
 			boolean asc = true;
 			int limit = 0;
@@ -66,6 +67,11 @@ public class Find extends HttpServlet
 				}
 			}
 
+			if(req.getParameter("fields")!=null)
+			{
+				fields = (DBObject)JSON.parse(req.getParameter("fields"));
+			}
+
 			if(req.getParameter("sort")!=null)
 			{
 				sort = req.getParameter("sort");
@@ -87,7 +93,7 @@ public class Find extends HttpServlet
 			}
 
 			JSONArray result = new JSONArray();
-			DBCursor cur = Data.getInstance().find(query,sort,asc,limit,skip);
+			DBCursor cur = find(query,fields,sort,asc,limit,skip);
 			for(DBObject card:cur)
 			{
 				result.put(new JSONObject(card.toString()));
@@ -102,6 +108,35 @@ public class Find extends HttpServlet
 		{
 			out.println("{\"error\":\"Invalid Query\"}");
 		}
+	}
+
+	public DBCursor find(DBObject query,DBObject fields,String sort,boolean asc,int limit,int skip)
+	{
+		DBCursor cur = Data.getMongodb().getDB("mtg").getCollection("cards").find(query,fields);
+
+		if(sort!=null && sort.length()>0)
+		{
+			if(asc)
+			{
+				cur = cur.sort(new BasicDBObject(sort,1));
+			}
+			else
+			{
+				cur = cur.sort(new BasicDBObject(sort,-1));
+			}
+		}
+
+		if(limit>0)
+		{
+			cur = cur.limit(limit);
+		}
+
+		if(skip>0)
+		{
+			cur = cur.skip(skip);
+		}
+
+		return cur;
 	}
 
 	@Override

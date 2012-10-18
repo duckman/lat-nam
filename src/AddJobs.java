@@ -19,7 +19,7 @@ public class AddJobs extends HttpServlet
 	{
 		if(Authenticate.isValid(req.getParameter("key")) && req.getParameter("start") != null && req.getParameter("end") != null)
 		{
-			Data.getInstance().addJobs(Integer.parseInt(req.getParameter("start")),Integer.parseInt(req.getParameter("end")));
+			Data.addJobs(Integer.parseInt(req.getParameter("start")),Integer.parseInt(req.getParameter("end")));
 		}
 		if(Authenticate.isValid(req.getParameter("key")) && req.getParameter("set") != null)
 		{
@@ -32,7 +32,7 @@ public class AddJobs extends HttpServlet
 				last = Integer.parseInt(dom.select(".cardItem").first().select("a").first().attr("href").split("[=&]")[1]);
 				for(Element card:dom.select(".cardItem"))
 				{
-					Data.getInstance().addJob(Integer.parseInt(card.select("a").first().attr("href").split("[=&]")[1]));
+					Data.addJob(Integer.parseInt(card.select("a").first().attr("href").split("[=&]")[1]));
 				}
 				page++;
 				in = new URL("http://gatherer.wizards.com/Pages/Search/Default.aspx?page="+page+"&action=advanced&set=%2B%5B%22"+URLEncoder.encode(req.getParameter("set"),"UTF-8")+"%22%5D");
@@ -43,16 +43,6 @@ public class AddJobs extends HttpServlet
 		{
 			resp.setStatus(404);
 		}
-	}
-
-	private boolean isValid(String key)
-	{
-		if(key != null && key.equals("testing"))
-		{
-			return true;
-		}
-		
-		return false;
 	}
 
 	@Override

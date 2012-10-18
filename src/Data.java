@@ -42,19 +42,15 @@ import org.apache.lucene.util.Version;
 @WebListener
 public class Data implements ServletContextListener,Runnable
 {
-	private static Data theData;
-	private static Thread worker;
-	private static boolean go;
+	private Thread worker;
+	private boolean go;
 	private static LinkedBlockingQueue<Integer> cardJobs;
 	private static LinkedBlockingQueue<Integer> langJobs;
 	private static Mongo mongo;
-	private static DB db;
-	private static DBCollection coll;
 
 	@Override
 	public void contextInitialized(ServletContextEvent sce)
 	{
-		theData = this;
 		try
 		{
 			File file = new File("cardJobs.object");
@@ -109,8 +105,6 @@ public class Data implements ServletContextListener,Runnable
 			}
 
 			mongo = new Mongo();
-			db = mongo.getDB("mtg");
-			coll = db.getCollection("cards");
 			worker = new Thread(this);
 			worker.start();
 		}
@@ -124,7 +118,7 @@ public class Data implements ServletContextListener,Runnable
 	{
 		try
 		{
-			for(DBObject card:coll.find())
+			for(DBObject card:mongo.getDB("mtg").getCollection("cards").find())
 			{
 				//LogFactory.getLog(Data.class).info(card+":"+card.get("multiverseid"));
 				langJobs.offer(Integer.parseInt(card.get("multiverseid").toString()));
@@ -138,6 +132,7 @@ public class Data implements ServletContextListener,Runnable
 
 	public void reIndexWords()
 	{
+		DBCollection coll = mongo.getDB("mtg").getCollection("cards");
 		for(DBObject card:coll.find().sort(new BasicDBObject("multiverseid",1)))
 		{
 			LogFactory.getLog(Data.class).info("Indexing words for "+card.get("multiverseid"));
@@ -184,18 +179,10 @@ public class Data implements ServletContextListener,Runnable
 		return card;
 	}
 
-	private String[] getWords(Object sentance)
-	{
-		if(sentance!=null)
-		{
-			return sentance.toString().split("\\s|><");
-		}
-		return null;
-	}
-
 	@Override
 	public void run()
 	{
+		DBCollection coll = mongo.getDB("mtg").getCollection("cards");
 		go = true;
 		while(go)
 		{
@@ -288,11 +275,6 @@ public class Data implements ServletContextListener,Runnable
 		worker = null;
 		mongo.close();
 		mongo = null;
-	}
-
-	public static Data getInstance()
-	{
-		return theData;
 	}
 
 	public ArrayList<DBObject> fetchRemoteCard(int multiverseID) throws IOException
@@ -488,23 +470,12 @@ public class Data implements ServletContextListener,Runnable
 		return mongo;
 	}
 
-	public long getCount()
-	{
-		return coll.count();
-	}
-
-	public BasicDBObject getLast()
-	{
-		BasicDBObject result = new BasicDBObject(coll.find().sort(new BasicDBObject("_id",-1)).limit(1).next().toMap());
-		return result;
-	}
-
-	public void addJob(int id)
+	public static void addJob(int id)
 	{
 		cardJobs.offer(id);
 	}
 
-	public void addJobs(int start, int end)
+	public static void addJobs(int start, int end)
 	{
 		if(start > end)
 		{
@@ -519,56 +490,11 @@ public class Data implements ServletContextListener,Runnable
 		}
 	}
 
-	public int getCardJobs()
-	{
-		return cardJobs.size();
-	}
-
-	public int getLangJobs()
-	{
-		return langJobs.size();
-	}
-
-	public DBCursor find(DBObject query,String sort,boolean asc,int limit,int skip)
-	{
-		DBCursor cur = coll.find(query);
-
-		if(sort!=null && sort.length()>0)
-		{
-			if(asc)
-			{
-				cur = cur.sort(new BasicDBObject(sort,1));
-			}
-			else
-			{
-				cur = cur.sort(new BasicDBObject(sort,-1));
-			}
-		}
-
-		if(limit>0)
-		{
-			cur = cur.limit(limit);
-		}
-
-		if(skip>0)
-		{
-			cur = cur.skip(skip);
-		}
-
-		return cur;
-	}
-
-	public void reverseJobs()
-	{
-		ArrayList<Integer> temp = new ArrayList<Integer>(cardJobs);
-		Collections.reverse(temp);
-		cardJobs = new LinkedBlockingQueue<Integer>(temp);
-	}
-
 	private void findLanguages(int multiverseID)
 	{
 		try
 		{
+			DBCollection coll = mongo.getDB("mtg").getCollection("cards");
 			URL in = new URL("http://gatherer.wizards.com/Pages/Card/Languages.aspx?multiverseid="+multiverseID);
 			Document dom = Jsoup.parse(in.openStream(),null,"http://gatherer.wizards.com/");
 			for(Element card:dom.select(".cardItem"))
