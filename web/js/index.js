@@ -25,8 +25,10 @@ $(function(){
 				url: 'Find',
 				dataType: 'json',
 				data: {
-					query: '{name:{"$regex":"'+query+'"}}',
-					fields: '{name:1}'
+					query: '{$or:[{lang:"English"},{lang:null}],name:{"$regex":"^'+query+'", "$options":"i"}}',
+					fields: '{name:1}',
+					sort: 'name',
+					limit: 50
 				},
 				type: 'POST',
 				success: function(data){
