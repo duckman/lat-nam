@@ -9,8 +9,16 @@ import java.io.FileOutputStream;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URL;
 import java.net.MalformedURLException;
+import java.util.Collections;
+import com.mongodb.DBCollection;
+import com.mongodb.DBObject;
+import com.mongodb.BasicDBObject;
+import org.apache.commons.codec.digest.DigestUtils;
+import java.security.DigestInputStream;
+import java.security.MessageDigest;
 
 @WebServlet(name="Image",urlPatterns={"/Image"})
 public class Image extends HttpServlet
@@ -19,19 +27,39 @@ public class Image extends HttpServlet
 	{
 		try
 		{
-			if(req.getParameter("type")!=null && req.getParameter("type").equals("card") && req.getParameter("multiverseid")!=null)
+			String query = req.getQueryString();
+			if(query == null)
 			{
-				//also surves to check for valid parameters
-				int id = Integer.parseInt(req.getParameter("multiverseid"));
-				File image = new File("images/card-"+id+".jpeg");
-				if(!image.exists())
+				query = "";
+				for(String param:Collections.list(req.getParameterNames()))
 				{
-					URL remote = new URL("http://gatherer.wizards.com/Handlers/Image.ashx?multiverseid="+id+"&type=card");
-					image.createNewFile();
-					IOUtils.copy(remote.openStream(),new FileOutputStream(image));
+					if(query.length()>0)
+					{
+						query+="&";
+					}
+					query+=param+"="+req.getParameter(param);
+				}
+			}
+
+			if(query.length()>0)
+			{
+				DBCollection coll = Data.getMongodb().getDB("mtg").getCollection("images");
+				DBObject image = coll.findOne(new BasicDBObject("query",query));
+				if(image == null)
+				{
+					image = new BasicDBObject("query",query);
+					URL remote = new URL("http://gatherer.wizards.com/Handlers/Image.ashx?"+query);
+					//LogFactory.getLog(Image.class).info(remote.toString());
+					image.put("hash",DigestUtils.md5Hex(remote.openStream()));
+					coll.insert(image);
+					File source = new File("images/"+image.get("hash")+".jpeg");
+					if(!source.exists())
+					{
+						IOUtils.copy(remote.openStream(),new FileOutputStream(source));
+					}
 				}
 				resp.setContentType("image/jpeg");
-				IOUtils.copy(new FileInputStream(image),resp.getOutputStream());
+				IOUtils.copy(new FileInputStream(new File("images/"+image.get("hash")+".jpeg")),resp.getOutputStream());
 			}
 			else
 			{

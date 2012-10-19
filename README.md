@@ -14,11 +14,11 @@ What's Done
 
 * Scraper
 * Find API page
+* Image API
 
 TO-DO
 -----
 
-* Image API
 * Figure out what language the older cards are
 
 Example
